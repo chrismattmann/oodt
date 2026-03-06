@@ -111,7 +111,7 @@ public class AsynchronousLocalEngineRunner extends AbstractEngineRunnerBase {
       @Override
       public void interrupt() {
         super.interrupt();
-        this.destroy();
+       
       }
 
     };

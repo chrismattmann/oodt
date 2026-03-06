@@ -230,9 +230,22 @@ public class AvroExecServer {
                     objOut.flush();
                     System.out.println();
                 } else {
-                    org.omg.PortableServer.Servant servant=(org.omg.PortableServer.Servant)server.getServant();
-                    org.omg.CORBA.ORB orb = servant._orb();
-                    System.out.println(orb.object_to_string(servant._this_object(orb)));         
+                    try {
+                        Class servantClass = Class.forName("org.omg.PortableServer.Servant");
+                        Class orbClass = Class.forName("org.omg.CORBA.ORB");
+                        Class corbaObjectClass = Class.forName("org.omg.CORBA.Object");
+                        Object servant = server.getServant();
+                        if (servantClass.isInstance(servant)) {
+                            Object orb = servantClass.getDeclaredMethod("_orb").invoke(servant);
+                            Object corbaObject = servantClass.getDeclaredMethod("_this_object", orbClass).invoke(servant, orb);
+                            String ior = (String) orbClass.getDeclaredMethod("object_to_string", corbaObjectClass).invoke(orb, corbaObject);
+                            System.out.println(ior);
+                        } else {
+                            System.err.println("Servant is neither RMI nor CORBA; skipping IOR print");
+                        }
+                    } catch (Throwable ignore) {
+                        System.err.println("CORBA classes not available; skipping IOR print");
+                    }
                 }
                 System.out.flush();
             }
