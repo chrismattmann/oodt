@@ -33,7 +33,7 @@ import junit.framework.TestCase;
  *
  * @author Kelly
  */
-public class MetadataTestCase extends TestCase {
+public abstract class MetadataTestCase extends TestCase {
     /**
      * Construct a metadata test case.
      *

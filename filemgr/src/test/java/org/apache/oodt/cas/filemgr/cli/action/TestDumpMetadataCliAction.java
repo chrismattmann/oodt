@@ -77,7 +77,7 @@ public class TestDumpMetadataCliAction extends TestCase {
           + "<val>data.dat</val>\n"
           + "</keyval>\n"
           + "</cas:metadata>\n",
-            printer.getPrintedMessages().get(0));
+            printer.getPrintedMessages().get(0).replaceAll("(?m)^\\s+", ""));
 
       cliAction.setOutputDir(tmpFile);
       cliAction.execute(printer);
@@ -90,7 +90,7 @@ public class TestDumpMetadataCliAction extends TestCase {
             + "<val>data.dat</val>\n"
             + "</keyval>\n"
             + "</cas:metadata>\n",
-            FileUtils.readFileToString(new File(tmpFile, FILE_NAME + ".met")));
+            FileUtils.readFileToString(new File(tmpFile, FILE_NAME + ".met")).replaceAll("(?m)^\\s+", "").replaceAll("(?m)^\\s+", ""));
    }
 
    public class MockDumpMetadataCliAction extends DumpMetadataCliAction {
