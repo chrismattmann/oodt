@@ -36,5 +36,6 @@ public class CrawlerLauncher {
       CmdLineUtility cmdLineUtility = new CmdLineUtility();
       cmdLineUtility.run(args);
       System.out.println("Exiting crawler launcher");
+      System.exit(0);
    }
 }
