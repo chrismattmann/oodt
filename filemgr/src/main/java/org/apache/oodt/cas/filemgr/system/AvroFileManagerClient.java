@@ -21,6 +21,8 @@ import org.apache.avro.AvroRemoteException;
 import org.apache.avro.ipc.NettyTransceiver;
 import org.apache.avro.ipc.Transceiver;
 import org.apache.avro.ipc.specific.SpecificRequestor;
+import org.jboss.netty.channel.ChannelFactory;
+import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
 import org.apache.oodt.cas.filemgr.datatransfer.DataTransfer;
 import org.apache.oodt.cas.filemgr.structs.Element;
 import org.apache.oodt.cas.filemgr.structs.FileTransferStatus;
@@ -57,6 +59,7 @@ import java.net.URL;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executors;
 
 /**
  * @author radu
@@ -69,6 +72,9 @@ public class AvroFileManagerClient implements FileManagerClient {
 
     /** Avro-Rpc client */
     private transient Transceiver client;
+
+    /** Netty resources owned by this client. */
+    private transient ChannelFactory channelFactory;
 
     /** proxy for the server */
     private transient AvroFileManager proxy;
@@ -88,7 +94,9 @@ public class AvroFileManagerClient implements FileManagerClient {
         try {
             this.fileManagerUrl = url;
             InetSocketAddress inetSocketAddress = new InetSocketAddress(url.getHost(), this.fileManagerUrl.getPort());
-            this.client = new NettyTransceiver(inetSocketAddress, 40000L);
+            this.channelFactory = new NioClientSocketChannelFactory(
+                Executors.newCachedThreadPool(), Executors.newCachedThreadPool());
+            this.client = new NettyTransceiver(inetSocketAddress, channelFactory, 40000L);
             proxy = (AvroFileManager) SpecificRequestor.getClient(AvroFileManager.class, client);
         } catch (IOException e) {
             logger.error("Error occurred when creating file manager: {}", url, e);
@@ -717,8 +725,17 @@ public class AvroFileManagerClient implements FileManagerClient {
     @Override
     public void close() throws IOException {
         logger.info("Closing file manager client for URL: {}", fileManagerUrl);
-        if (client != null) {
-            client.close();
+        try {
+            if (client != null) {
+                client.close();
+            }
+        } finally {
+            if (channelFactory != null) {
+                channelFactory.releaseExternalResources();
+            }
+            client = null;
+            channelFactory = null;
+            proxy = null;
         }
     }
 }
