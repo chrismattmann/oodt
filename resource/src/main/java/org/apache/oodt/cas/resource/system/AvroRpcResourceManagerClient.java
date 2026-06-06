@@ -53,6 +53,8 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
 
     transient Transceiver client;
     transient ResourceManager proxy;
+    private static final int CONNECT_ATTEMPTS = 30;
+    private static final long CONNECT_RETRY_MILLIS = 1000L;
 
     public AvroRpcResourceManagerClient(URL url) {
         this.resMgrUrl = url;
@@ -73,12 +75,27 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
             }
         }
 
-        try {
-            this.client = new NettyTransceiver(new InetSocketAddress(url.getHost(), url.getPort()));
-            proxy = (ResourceManager) SpecificRequestor.getClient(ResourceManager.class, client);
-        } catch (IOException e) {
-            e.printStackTrace();
+        IOException lastException = null;
+        for (int attempt = 1; attempt <= CONNECT_ATTEMPTS; attempt++) {
+            try {
+                this.client = new NettyTransceiver(new InetSocketAddress(url.getHost(), url.getPort()));
+                proxy = (ResourceManager) SpecificRequestor.getClient(ResourceManager.class, client);
+                return;
+            } catch (IOException e) {
+                lastException = e;
+                LOG.log(Level.WARNING,
+                    "Unable to connect to Resource Manager at [{0}] attempt [{1}/{2}]: {3}",
+                    new Object[] { url, attempt, CONNECT_ATTEMPTS, e.getMessage() });
+                try {
+                    Thread.sleep(CONNECT_RETRY_MILLIS);
+                } catch (InterruptedException interruptedException) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted connecting to Resource Manager at: " + url,
+                        interruptedException);
+                }
+            }
         }
+        throw new IllegalStateException("Unable to connect to Resource Manager at: " + url, lastException);
 
     }
 
