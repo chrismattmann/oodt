@@ -22,6 +22,7 @@ import org.apache.oodt.cas.workflow.system.WorkflowManagerClient;
 import org.apache.oodt.cas.workflow.system.rpc.RpcCommunicationFactory;
 import org.apache.xmlrpc.XmlRpcClient;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -39,7 +40,7 @@ import java.util.logging.Logger;
  * @author mattmann
  * @version $Revision$
  */
-public class WorkflowManagerUtils implements Serializable {
+public class WorkflowManagerUtils implements Serializable, AutoCloseable {
 
   /* our workflow manager client */
   private WorkflowManagerClient client;
@@ -153,6 +154,14 @@ public class WorkflowManagerUtils implements Serializable {
    */
   public URL getWmUrl() {
     return this.wmUrl;
+  }
+
+  @Override
+  public void close() throws IOException {
+    if (this.client != null) {
+      this.client.close();
+      this.client = null;
+    }
   }
 
 }

@@ -36,6 +36,7 @@ import org.apache.oodt.cas.metadata.Metadata;
 
 //JDK imports
 import java.io.File;
+import java.io.IOException;
 import java.io.Serializable;
 import java.net.MalformedURLException;
 import java.net.URI;
@@ -56,7 +57,7 @@ import java.util.logging.Logger;
  * @version $Revision$
  * 
  */
-public class FileManagerUtils implements PCSConfigMetadata, Serializable {
+public class FileManagerUtils implements PCSConfigMetadata, Serializable, AutoCloseable {
   /* our log stream */
   private static Logger LOG = Logger
       .getLogger(FileManagerUtils.class.getName());
@@ -486,6 +487,14 @@ public class FileManagerUtils implements PCSConfigMetadata, Serializable {
    */
   public URL getFmUrl() {
     return this.fmUrl;
+  }
+
+  @Override
+  public void close() throws IOException {
+    if (this.fmgrClient != null) {
+      this.fmgrClient.close();
+      this.fmgrClient = null;
+    }
   }
 
   public static String getDirProductFilePath(Product p, String prodName) {
