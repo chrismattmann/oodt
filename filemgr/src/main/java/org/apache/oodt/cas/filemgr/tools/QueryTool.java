@@ -249,6 +249,9 @@ public final class QueryTool {
         complexQuery.setToStringResultFormat(outputFormat);
         try(FileManagerClient fmClient = RpcCommunicationFactory.createClient(new URL(filemgrUrl))){
             List<QueryResult> results = fmClient.complexQuery(complexQuery);
+            if (results == null || results.isEmpty()) {
+                return "";
+            }
             StringBuilder returnString = new StringBuilder("");
             for (QueryResult qr : results) {
                 returnString.append(qr.toString()).append(delimiter);

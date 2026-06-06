@@ -477,6 +477,9 @@ public class FileManager {
             for (ProductType productType : productTypes) {
                 List<String> productIds = catalog.query(this.getCatalogQuery(
                         complexQuery, productType), productType);
+                if (productIds == null || productIds.isEmpty()) {
+                    continue;
+                }
                 for (String productId : productIds) {
                     Product product = catalog.getProductById(productId);
                     product.setProductType(productType);
@@ -508,8 +511,10 @@ public class FileManager {
             return queryResults;
         } catch (Exception e) {
             e.printStackTrace();
+            String message = e.getMessage() != null ? e.getMessage()
+                    : e.getClass().getName();
             throw new CatalogException("Failed to perform complex query : "
-                    + e.getMessage());
+                    + message, e);
         }
     }
 

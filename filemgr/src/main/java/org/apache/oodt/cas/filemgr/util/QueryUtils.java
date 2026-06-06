@@ -41,6 +41,9 @@ public class QueryUtils {
     
     public static String getQueryResultsAsString(
             List<QueryResult> queryResults, String delimiter) {
+        if (queryResults == null || queryResults.isEmpty()) {
+            return "";
+        }
         StringBuilder returnString = new StringBuilder("");
         for (QueryResult qr : queryResults) {
             returnString.append(qr.toString()).append(delimiter);

@@ -714,7 +714,7 @@ public class LuceneCatalog implements Catalog {
         // paginate products returns full products, but the query method
         // is expected to return product ids
         List<Product> fullProducts = paginateQuery(query, type, -1, null);
-        List<String> productIds = null;
+        List<String> productIds = new Vector<String>();
 
         if (fullProducts != null && fullProducts.size() > 0) {
             productIds = new Vector<String>(fullProducts.size());

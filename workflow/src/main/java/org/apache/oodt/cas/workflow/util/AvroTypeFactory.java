@@ -93,16 +93,14 @@ public class AvroTypeFactory {
         AvroWorkflowTask avroWorkflowTask = new AvroWorkflowTask();
         avroWorkflowTask.setTaskId(workflowTask.getTaskId());
         avroWorkflowTask.setTaskName(workflowTask.getTaskName());
-        if (workflowTask.getTaskConfig() != null)
-            avroWorkflowTask.setTaskConfig(getAvroTaskConfig(workflowTask.getTaskConfig()));
-        if (workflowTask.getPreConditions() != null)
-            avroWorkflowTask.setPreConditions(getAvroWorkflowConditions(workflowTask.getPreConditions()));
-        if (workflowTask.getPostConditions() != null)
-            avroWorkflowTask.setPostConditions(getAvroWorkflowConditions(workflowTask.getPostConditions()));
+        avroWorkflowTask.setTaskConfig(workflowTask.getTaskConfig() != null
+                ? getAvroTaskConfig(workflowTask.getTaskConfig()) : new HashMap<String, String>());
+        avroWorkflowTask.setPreConditions(getAvroWorkflowConditions(workflowTask.getPreConditions()));
+        avroWorkflowTask.setPostConditions(getAvroWorkflowConditions(workflowTask.getPostConditions()));
         avroWorkflowTask.setTaskInstanceClassName(workflowTask.getTaskInstanceClassName());
         avroWorkflowTask.setOrder(workflowTask.getOrder());
-        if(workflowTask.getRequiredMetFields() != null)
-        avroWorkflowTask.setRequiredMetFields(workflowTask.getRequiredMetFields());
+        avroWorkflowTask.setRequiredMetFields(workflowTask.getRequiredMetFields() != null
+                ? workflowTask.getRequiredMetFields() : new ArrayList<String>());
         return avroWorkflowTask;
 
     }
@@ -118,7 +116,7 @@ public class AvroTypeFactory {
 
     private static List<AvroWorkflowCondition> getAvroWorkflowConditions(List<WorkflowCondition> workflowConditions){
         ArrayList<AvroWorkflowCondition> avroWorkflowConditions = new ArrayList<AvroWorkflowCondition>();
-        if (workflowConditions.size() > 0 )
+        if (workflowConditions != null && workflowConditions.size() > 0 )
             for (WorkflowCondition wfc : workflowConditions){
                 avroWorkflowConditions.add(getAvroWorkflowCondition(wfc));
             }
@@ -166,18 +164,15 @@ public class AvroTypeFactory {
         AvroWorkflow avroWorkflow = new AvroWorkflow();
         avroWorkflow.setName(workflow.getName());
         avroWorkflow.setId(workflow.getId());
-        if (workflow.getTasks() != null)
-            avroWorkflow.setTasks(getAvroWorkflowTasks(workflow.getTasks()));
-        if (workflow.getPreConditions() != null)
-            avroWorkflow.setPreConditions(getAvroWorkflowConditions(workflow.getPreConditions()));
-        if (workflow.getPostConditions() != null)
-            avroWorkflow.setPostConditions(getAvroWorkflowConditions(workflow.getPostConditions()));
+        avroWorkflow.setTasks(getAvroWorkflowTasks(workflow.getTasks()));
+        avroWorkflow.setPreConditions(getAvroWorkflowConditions(workflow.getPreConditions()));
+        avroWorkflow.setPostConditions(getAvroWorkflowConditions(workflow.getPostConditions()));
         return avroWorkflow;
     }
 
     private static List<AvroWorkflowTask> getAvroWorkflowTasks(List<WorkflowTask> workflowTasks){
         List<AvroWorkflowTask> avroWorkflowTasks = new ArrayList<AvroWorkflowTask>();
-        if(workflowTasks.size() > 0)
+        if(workflowTasks != null && workflowTasks.size() > 0)
             for (WorkflowTask wt : workflowTasks){
                 avroWorkflowTasks.add(getAvroWorkflowTask(wt));
             }
@@ -217,8 +212,8 @@ public class AvroTypeFactory {
         avroWorkflowInstance.setEndDateTimeIsoStr(workflowInstance.getEndDateTimeIsoStr());
         avroWorkflowInstance.setCurrentTaskStartDateTimeIsoStr(workflowInstance.getCurrentTaskStartDateTimeIsoStr());
         avroWorkflowInstance.setCurrentTaskEndDateTimeIsoStr(workflowInstance.getCurrentTaskEndDateTimeIsoStr());
-        if (workflowInstance.getSharedContext() != null)
-            avroWorkflowInstance.setSharedContext(getAvroMetadata(workflowInstance.getSharedContext()));
+        avroWorkflowInstance.setSharedContext(workflowInstance.getSharedContext() != null
+                ? getAvroMetadata(workflowInstance.getSharedContext()) : new HashMap<String, Object>());
         if (workflowInstance.getPriority() != null)
             avroWorkflowInstance.setPriority(workflowInstance.getPriority().getValue());
         return avroWorkflowInstance;
@@ -269,8 +264,7 @@ public class AvroTypeFactory {
         avroWorkflowInstancePage.setPageNum(workflowInstancePage.getPageNum());
         avroWorkflowInstancePage.setTotalPages(workflowInstancePage.getTotalPages());
         avroWorkflowInstancePage.setPageSize(workflowInstancePage.getPageSize());
-        if (workflowInstancePage.getPageWorkflows() != null)
-            avroWorkflowInstancePage.setPageWorkflows(getAvroWorkflowInstances(workflowInstancePage.getPageWorkflows()));
+        avroWorkflowInstancePage.setPageWorkflows(getAvroWorkflowInstances(workflowInstancePage.getPageWorkflows()));
 
         return avroWorkflowInstancePage;
     }
