@@ -67,13 +67,14 @@ public class ThreadPoolWorkflowEngineFactory implements WorkflowEngineFactory {
   }
 
   protected URL getResmgrUrl() {
+    String resmgrUrl = System.getProperty(RESMGR_URL_PROPERTY);
     try {
-      return new URL(PathUtils.replaceEnvVariables(System.getProperty(RESMGR_URL_PROPERTY)));
+      return new URL(PathUtils.replaceEnvVariables(resmgrUrl));
     } catch (Exception e) {
       LOG.log(
           Level.INFO,
           "No Resource Manager URL provided or malformed URL: executing jobs " +
-          "locally. URL: ["+PathUtils.replaceEnvVariables(System.getProperty(RESMGR_URL_PROPERTY))+"]");
+          "locally. URL: [" + (resmgrUrl == null ? "" : PathUtils.replaceEnvVariables(resmgrUrl)) + "]");
       return null;
     }
   }
