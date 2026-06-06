@@ -5,13 +5,13 @@
   "namespace":"org.apache.oodt.cas.resource.structs.avrotypes",
   "imports":[],
   "fields":[
-    {"name":"id","type":"string"},
+    {"name":"id","type":["null", "string"], "default":null},
     {"name":"name","type":"string"},
     {"name":"jobInstanceClassName","type":"string"},
     {"name":"jobInputClassName","type":"string"},
     {"name":"queueName","type":"string"},
     {"name":"loadValue","type":"int"},
-    {"name":"status","type":"string"}
+    {"name":"status","type":["null", "string"], "default":null}
 
   ]
 }

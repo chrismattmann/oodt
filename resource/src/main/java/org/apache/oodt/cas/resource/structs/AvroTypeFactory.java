@@ -49,8 +49,8 @@ public class AvroTypeFactory {
         avroJob.setJobInstanceClassName(job.getJobInstanceClassName());
         avroJob.setJobInputClassName(job.getJobInputClassName());
         avroJob.setQueueName(job.getQueueName());
-        avroJob.setLoadValue(avroJob.getLoadValue());
-        avroJob.setStatus(avroJob.getStatus());
+        avroJob.setLoadValue(job.getLoadValue());
+        avroJob.setStatus(job.getStatus());
 
         return avroJob;
     }

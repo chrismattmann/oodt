@@ -198,11 +198,10 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return proxy.handleJob(AvroTypeFactory.getAvroJob(exec), AvroTypeFactory.getAvroJobInput(in));
         } catch (AvroRemoteException e) {
-            LOG.log(Level.SEVERE,
-                    "Server error!");
-
+            throw new JobExecutionException(e);
+        } catch (RuntimeException e) {
+            throw new JobExecutionException(e);
         }
-        return null;
     }
 
     @Override
