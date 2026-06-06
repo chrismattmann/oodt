@@ -55,6 +55,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
     transient ResourceManager proxy;
 
     public AvroRpcResourceManagerClient(URL url) {
+        this.resMgrUrl = url;
         // set up the configuration, if there is any
         if (System.getProperty("org.apache.oodt.cas.resource.properties") != null) {
             String configFile = System

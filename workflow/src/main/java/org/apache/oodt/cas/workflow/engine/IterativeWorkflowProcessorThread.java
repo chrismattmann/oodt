@@ -21,7 +21,6 @@ import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.resource.structs.Job;
 import org.apache.oodt.cas.resource.structs.exceptions.JobExecutionException;
 import org.apache.oodt.cas.resource.system.ResourceManagerClient;
-import org.apache.oodt.cas.resource.system.XmlRpcResourceManagerClient;
 import org.apache.oodt.cas.workflow.instrepo.WorkflowInstanceRepository;
 import org.apache.oodt.cas.workflow.metadata.CoreMetKeys;
 import org.apache.oodt.cas.workflow.structs.TaskJobInput;
@@ -424,7 +423,7 @@ public class IterativeWorkflowProcessorThread implements WorkflowStatus, CoreMet
    * @param client
    *          the rClient to set
    */
-  public void setRClient(XmlRpcResourceManagerClient client) {
+  public void setRClient(ResourceManagerClient client) {
     rClient = client;
     if (rClient != null) {
       logger.info("Resource Manager Job Submission enabled to: [{}]", rClient.getResMgrUrl());

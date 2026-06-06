@@ -19,7 +19,8 @@ package org.apache.oodt.cas.workflow.engine;
 
 //OODT imports
 import org.apache.oodt.cas.metadata.Metadata;
-import org.apache.oodt.cas.resource.system.XmlRpcResourceManagerClient;
+import org.apache.oodt.cas.resource.system.ResourceManagerClient;
+import org.apache.oodt.cas.resource.system.rpc.ResourceManagerFactory;
 import org.apache.oodt.cas.workflow.structs.Workflow;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
 import org.apache.oodt.cas.workflow.structs.WorkflowStatus;
@@ -71,7 +72,7 @@ public class ThreadPoolWorkflowEngine implements WorkflowEngine, WorkflowStatus 
   private WorkflowInstanceRepository instRep = null;
 
   /* our resource manager client */
-  private XmlRpcResourceManagerClient rClient = null;
+  private ResourceManagerClient rClient = null;
 
   /* the URL pointer to the parent Workflow Manager */
   private URL wmgrUrl = null;
@@ -119,7 +120,7 @@ public class ThreadPoolWorkflowEngine implements WorkflowEngine, WorkflowStatus 
     workerMap = new ConcurrentHashMap();
 
     if (resUrl != null) {
-      rClient = new XmlRpcResourceManagerClient(resUrl);
+      rClient = ResourceManagerFactory.getResourceManagerClient(resUrl);
     }
   }
 
