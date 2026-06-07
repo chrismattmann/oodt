@@ -21,6 +21,8 @@ import org.apache.avro.AvroRemoteException;
 import org.apache.avro.ipc.NettyTransceiver;
 import org.apache.avro.ipc.Transceiver;
 import org.apache.avro.ipc.specific.SpecificRequestor;
+import org.jboss.netty.channel.ChannelFactory;
+import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
 import org.apache.oodt.cas.cli.CmdLineUtility;
 import org.apache.oodt.cas.resource.structs.AvroTypeFactory;
 import org.apache.oodt.cas.resource.structs.Job;
@@ -39,6 +41,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URL;
 import java.util.List;
+import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -47,6 +50,18 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
     /* our log stream */
     private static Logger LOG = Logger
             .getLogger(AvroRpcResourceManagerClient.class.getName());
+
+    private static final ChannelFactory CHANNEL_FACTORY = new NioClientSocketChannelFactory(
+            Executors.newCachedThreadPool(), Executors.newCachedThreadPool());
+
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                CHANNEL_FACTORY.releaseExternalResources();
+            }
+        }, "avro-resource-client-shutdown"));
+    }
 
     /* resource manager url */
     private URL resMgrUrl = null;
@@ -78,7 +93,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         IOException lastException = null;
         for (int attempt = 1; attempt <= CONNECT_ATTEMPTS; attempt++) {
             try {
-                this.client = new NettyTransceiver(new InetSocketAddress(url.getHost(), url.getPort()));
+                this.client = new NettyTransceiver(new InetSocketAddress(url.getHost(), url.getPort()), CHANNEL_FACTORY);
                 proxy = (ResourceManager) SpecificRequestor.getClient(ResourceManager.class, client);
                 return;
             } catch (IOException e) {

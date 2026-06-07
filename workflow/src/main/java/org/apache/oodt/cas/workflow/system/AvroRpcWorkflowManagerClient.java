@@ -22,6 +22,8 @@ import org.apache.avro.ipc.HttpTransceiver;
 import org.apache.avro.ipc.NettyTransceiver;
 import org.apache.avro.ipc.Transceiver;
 import org.apache.avro.ipc.specific.SpecificRequestor;
+import org.jboss.netty.channel.ChannelFactory;
+import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.workflow.structs.Workflow;
 import org.apache.oodt.cas.workflow.structs.WorkflowCondition;
@@ -36,6 +38,7 @@ import java.net.InetSocketAddress;
 import java.net.URL;
 import java.util.List;
 import java.util.Vector;
+import java.util.concurrent.Executors;
 
 /**
  * @author radu
@@ -47,6 +50,18 @@ import java.util.Vector;
 public class AvroRpcWorkflowManagerClient implements WorkflowManagerClient {
 
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(AvroRpcWorkflowManagerClient.class);
+
+    private static final ChannelFactory CHANNEL_FACTORY = new NioClientSocketChannelFactory(
+        Executors.newCachedThreadPool(), Executors.newCachedThreadPool());
+
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                CHANNEL_FACTORY.releaseExternalResources();
+            }
+        }, "avro-workflow-client-shutdown"));
+    }
 
     private transient Transceiver client;
     private transient org.apache.oodt.cas.workflow.struct.avrotypes.WorkflowManager proxy;
@@ -241,7 +256,8 @@ public class AvroRpcWorkflowManagerClient implements WorkflowManagerClient {
     public void setWorkflowManagerUrl(URL workflowManagerUrl) {
         this.workflowManagerUrl = workflowManagerUrl;
         try {
-            client = new NettyTransceiver(new InetSocketAddress(workflowManagerUrl.getHost(), workflowManagerUrl.getPort()));
+            client = new NettyTransceiver(
+                new InetSocketAddress(workflowManagerUrl.getHost(), workflowManagerUrl.getPort()), CHANNEL_FACTORY);
             proxy = SpecificRequestor.getClient(org.apache.oodt.cas.workflow.struct.avrotypes.WorkflowManager.class, client);
         } catch (IOException e) {
             logger.error("Error occurred when setting workflow manager url: {}", workflowManagerUrl, e);
@@ -264,6 +280,7 @@ public class AvroRpcWorkflowManagerClient implements WorkflowManagerClient {
         if (client != null) {
             client.close();
             client = null;
+            proxy = null;
             logger.info("Closed workflow manager client: {}", workflowManagerUrl.toString());
         }
     }

@@ -70,11 +70,21 @@ public class AvroFileManagerClient implements FileManagerClient {
 
     private static final Logger logger = LoggerFactory.getLogger(AvroFileManagerClient.class);
 
+    /** Shared Netty resources for all Avro file manager clients in this JVM. */
+    private static final ChannelFactory CHANNEL_FACTORY = new NioClientSocketChannelFactory(
+        Executors.newCachedThreadPool(), Executors.newCachedThreadPool());
+
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                CHANNEL_FACTORY.releaseExternalResources();
+            }
+        }, "avro-filemgr-client-shutdown"));
+    }
+
     /** Avro-Rpc client */
     private transient Transceiver client;
-
-    /** Netty resources owned by this client. */
-    private transient ChannelFactory channelFactory;
 
     /** proxy for the server */
     private transient AvroFileManager proxy;
@@ -94,9 +104,7 @@ public class AvroFileManagerClient implements FileManagerClient {
         try {
             this.fileManagerUrl = url;
             InetSocketAddress inetSocketAddress = new InetSocketAddress(url.getHost(), this.fileManagerUrl.getPort());
-            this.channelFactory = new NioClientSocketChannelFactory(
-                Executors.newCachedThreadPool(), Executors.newCachedThreadPool());
-            this.client = new NettyTransceiver(inetSocketAddress, channelFactory, 40000L);
+            this.client = new NettyTransceiver(inetSocketAddress, CHANNEL_FACTORY, 40000L);
             proxy = (AvroFileManager) SpecificRequestor.getClient(AvroFileManager.class, client);
         } catch (IOException e) {
             logger.error("Error occurred when creating file manager: {}", url, e);
@@ -730,11 +738,7 @@ public class AvroFileManagerClient implements FileManagerClient {
                 client.close();
             }
         } finally {
-            if (channelFactory != null) {
-                channelFactory.releaseExternalResources();
-            }
             client = null;
-            channelFactory = null;
             proxy = null;
         }
     }
