@@ -23,6 +23,8 @@ import org.apache.avro.ipc.Transceiver;
 import org.apache.avro.ipc.specific.SpecificRequestor;
 import org.jboss.netty.channel.ChannelFactory;
 import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
+import org.jboss.netty.channel.socket.nio.NioWorkerPool;
+import org.jboss.netty.util.HashedWheelTimer;
 import org.apache.oodt.cas.cli.CmdLineUtility;
 import org.apache.oodt.cas.resource.structs.AvroTypeFactory;
 import org.apache.oodt.cas.resource.structs.Job;
@@ -41,7 +43,10 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URL;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -51,8 +56,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
     private static Logger LOG = Logger
             .getLogger(AvroRpcResourceManagerClient.class.getName());
 
-    private static final ChannelFactory CHANNEL_FACTORY = new NioClientSocketChannelFactory(
-            Executors.newCachedThreadPool(), Executors.newCachedThreadPool());
+    private static final ChannelFactory CHANNEL_FACTORY = newSharedChannelFactory("avro-resource-client");
 
     static {
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
@@ -363,5 +367,33 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         } catch (AvroRemoteException e) {
             throw new JobQueueException(e);
         }
+    }
+
+    private static ExecutorService newDaemonCachedThreadPool(final String namePrefix) {
+        return Executors.newCachedThreadPool(newDaemonThreadFactory(namePrefix));
+    }
+
+    private static ChannelFactory newSharedChannelFactory(String namePrefix) {
+        return new NioClientSocketChannelFactory(
+                newDaemonCachedThreadPool(namePrefix + "-boss"),
+                1,
+                new NioWorkerPool(newDaemonCachedThreadPool(namePrefix + "-worker"), getIoWorkerCount()),
+                new HashedWheelTimer(newDaemonThreadFactory(namePrefix + "-timer")));
+    }
+
+    private static int getIoWorkerCount() {
+        return Math.max(2, Runtime.getRuntime().availableProcessors() * 2);
+    }
+
+    private static ThreadFactory newDaemonThreadFactory(final String namePrefix) {
+        final AtomicInteger count = new AtomicInteger();
+        return new ThreadFactory() {
+            @Override
+            public Thread newThread(Runnable runnable) {
+                Thread thread = new Thread(runnable, namePrefix + "-" + count.incrementAndGet());
+                thread.setDaemon(true);
+                return thread;
+            }
+        };
     }
 }

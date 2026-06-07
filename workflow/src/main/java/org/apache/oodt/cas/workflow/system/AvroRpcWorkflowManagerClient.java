@@ -24,6 +24,8 @@ import org.apache.avro.ipc.Transceiver;
 import org.apache.avro.ipc.specific.SpecificRequestor;
 import org.jboss.netty.channel.ChannelFactory;
 import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
+import org.jboss.netty.channel.socket.nio.NioWorkerPool;
+import org.jboss.netty.util.HashedWheelTimer;
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.workflow.structs.Workflow;
 import org.apache.oodt.cas.workflow.structs.WorkflowCondition;
@@ -34,11 +36,17 @@ import org.apache.oodt.cas.workflow.util.AvroTypeFactory;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.net.URL;
 import java.util.List;
 import java.util.Vector;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author radu
@@ -51,8 +59,7 @@ public class AvroRpcWorkflowManagerClient implements WorkflowManagerClient {
 
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(AvroRpcWorkflowManagerClient.class);
 
-    private static final ChannelFactory CHANNEL_FACTORY = new NioClientSocketChannelFactory(
-        Executors.newCachedThreadPool(), Executors.newCachedThreadPool());
+    private static final ChannelFactory CHANNEL_FACTORY = newSharedChannelFactory("avro-workflow-client");
 
     static {
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
@@ -278,7 +285,7 @@ public class AvroRpcWorkflowManagerClient implements WorkflowManagerClient {
     @Override
     public void close() throws IOException {
         if (client != null) {
-            client.close();
+            closeTransceiver(client);
             client = null;
             proxy = null;
             logger.info("Closed workflow manager client: {}", workflowManagerUrl.toString());
@@ -289,5 +296,68 @@ public class AvroRpcWorkflowManagerClient implements WorkflowManagerClient {
     public void finalize() throws IOException {
         close();
         logger.info("Finalized client");
+    }
+
+    private static void closeTransceiver(Transceiver transceiver) throws IOException {
+        if (transceiver instanceof NettyTransceiver) {
+            closeSharedNettyTransceiver((NettyTransceiver) transceiver);
+        } else {
+            transceiver.close();
+        }
+    }
+
+    private static void closeSharedNettyTransceiver(NettyTransceiver transceiver) throws IOException {
+        try {
+            Field stopping = NettyTransceiver.class.getDeclaredField("stopping");
+            stopping.setAccessible(true);
+            stopping.set(transceiver, Boolean.TRUE);
+
+            Method disconnect = NettyTransceiver.class.getDeclaredMethod(
+                "disconnect", boolean.class, boolean.class, Throwable.class);
+            disconnect.setAccessible(true);
+            disconnect.invoke(transceiver, true, true, null);
+        } catch (NoSuchFieldException | NoSuchMethodException | IllegalAccessException e) {
+            throw new IOException("Unable to close shared Avro Netty transceiver", e);
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof IOException) {
+                throw (IOException) cause;
+            }
+            if (cause instanceof RuntimeException) {
+                throw (RuntimeException) cause;
+            }
+            if (cause instanceof Error) {
+                throw (Error) cause;
+            }
+            throw new IOException("Unable to close shared Avro Netty transceiver", cause);
+        }
+    }
+
+    private static ExecutorService newDaemonCachedThreadPool(final String namePrefix) {
+        return Executors.newCachedThreadPool(newDaemonThreadFactory(namePrefix));
+    }
+
+    private static ChannelFactory newSharedChannelFactory(String namePrefix) {
+        return new NioClientSocketChannelFactory(
+            newDaemonCachedThreadPool(namePrefix + "-boss"),
+            1,
+            new NioWorkerPool(newDaemonCachedThreadPool(namePrefix + "-worker"), getIoWorkerCount()),
+            new HashedWheelTimer(newDaemonThreadFactory(namePrefix + "-timer")));
+    }
+
+    private static int getIoWorkerCount() {
+        return Math.max(2, Runtime.getRuntime().availableProcessors() * 2);
+    }
+
+    private static ThreadFactory newDaemonThreadFactory(final String namePrefix) {
+        final AtomicInteger count = new AtomicInteger();
+        return new ThreadFactory() {
+            @Override
+            public Thread newThread(Runnable runnable) {
+                Thread thread = new Thread(runnable, namePrefix + "-" + count.incrementAndGet());
+                thread.setDaemon(true);
+                return thread;
+            }
+        };
     }
 }
