@@ -20,6 +20,8 @@ package org.apache.oodt.pcs.tools;
 //JDK imports
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
@@ -27,11 +29,20 @@ import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Vector;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 
 //APACHE imports
 import org.apache.avro.ipc.NettyTransceiver;
 import org.apache.avro.ipc.specific.SpecificRequestor;
+import org.jboss.netty.channel.ChannelFactory;
+import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
+import org.jboss.netty.channel.socket.nio.NioWorkerPool;
+import org.jboss.netty.util.HashedWheelTimer;
 import org.apache.oodt.cas.resource.system.extern.AvroRpcBatchStub;
 import org.apache.oodt.cas.crawl.daemon.CrawlDaemonController;
 import org.apache.oodt.cas.filemgr.metadata.CoreMetKeys;
@@ -53,18 +64,6 @@ import org.apache.oodt.pcs.util.ResourceManagerUtils;
 import org.apache.oodt.pcs.util.WorkflowManagerUtils;
 import org.apache.xmlrpc.XmlRpcClient;
 
-import java.util.Calendar;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.List;
-import java.util.Vector;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-//APACHE imports
-//OODT imports
-
 /**
  * 
  * A tool to monitor the health of the PCS.
@@ -77,6 +76,18 @@ public final class PCSHealthMonitor implements CoreMetKeys,
   public static final double DOUBLE = 1000.0;
   public static final double DOUBLE1 = 1000.0;
   private static Logger LOG = Logger.getLogger(PCSHealthMonitor.class.getName());
+  private static final ChannelFactory BATCH_STUB_CHANNEL_FACTORY =
+      newSharedChannelFactory("pcs-health-batchstub-client");
+
+  static {
+    Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+      @Override
+      public void run() {
+        BATCH_STUB_CHANNEL_FACTORY.releaseExternalResources();
+      }
+    }, "pcs-health-batchstub-client-shutdown"));
+  }
+
   private FileManagerUtils fm;
 
   private WorkflowManagerUtils wm;
@@ -97,7 +108,7 @@ public final class PCSHealthMonitor implements CoreMetKeys,
     this.statesFile = new WorkflowStatesFile(statesFilePath);
   }
 
-  public PCSHealthMonitorReport getReport() {
+  public synchronized PCSHealthMonitorReport getReport() {
     PCSHealthMonitorReport report = new PCSHealthMonitorReport();
     report.setGenerationDate(new Date());
     report.setFmStatus(getFileManagerStatus());
@@ -617,15 +628,77 @@ public final class PCSHealthMonitor implements CoreMetKeys,
 
   private boolean getBatchStubUp(ResourceNode node) {
 
-    NettyTransceiver client;
+    NettyTransceiver client = null;
     AvroRpcBatchStub proxy;
     try {
-      client = new NettyTransceiver(new InetSocketAddress(node.getIpAddr().getHost(), node.getIpAddr().getPort()));
+      client = new NettyTransceiver(
+          new InetSocketAddress(node.getIpAddr().getHost(), node.getIpAddr().getPort()),
+          BATCH_STUB_CHANNEL_FACTORY, 40000L);
       proxy = (AvroRpcBatchStub) SpecificRequestor.getClient(AvroRpcBatchStub.class, client);
       return proxy.isAlive();
     } catch (IOException e) {
       return false;
+    } finally {
+      if (client != null) {
+        try {
+          closeNettyTransceiver(client);
+        } catch (IOException | RuntimeException e) {
+          LOG.log(Level.FINE, "Unable to close batch stub health check client", e);
+        }
+      }
     }
+  }
+
+  private static void closeNettyTransceiver(NettyTransceiver transceiver)
+      throws IOException {
+    try {
+      Method close = NettyTransceiver.class.getMethod("close", boolean.class);
+      close.invoke(transceiver, false);
+    } catch (NoSuchMethodException e) {
+      transceiver.close();
+    } catch (IllegalAccessException e) {
+      throw new IOException("Unable to close Avro Netty transceiver", e);
+    } catch (InvocationTargetException e) {
+      Throwable cause = e.getCause();
+      if (cause instanceof IOException) {
+        throw (IOException) cause;
+      }
+      if (cause instanceof RuntimeException) {
+        throw (RuntimeException) cause;
+      }
+      if (cause instanceof Error) {
+        throw (Error) cause;
+      }
+      throw new IOException("Unable to close Avro Netty transceiver", cause);
+    }
+  }
+
+  private static ExecutorService newDaemonCachedThreadPool(final String namePrefix) {
+    return Executors.newCachedThreadPool(newDaemonThreadFactory(namePrefix));
+  }
+
+  private static ChannelFactory newSharedChannelFactory(String namePrefix) {
+    return new NioClientSocketChannelFactory(
+        newDaemonCachedThreadPool(namePrefix + "-boss"),
+        1,
+        new NioWorkerPool(newDaemonCachedThreadPool(namePrefix + "-worker"), getIoWorkerCount()),
+        new HashedWheelTimer(newDaemonThreadFactory(namePrefix + "-timer")));
+  }
+
+  private static int getIoWorkerCount() {
+    return Integer.getInteger("org.apache.oodt.avro.client.ioWorkers", 2);
+  }
+
+  private static ThreadFactory newDaemonThreadFactory(final String namePrefix) {
+    final AtomicInteger count = new AtomicInteger();
+    return new ThreadFactory() {
+      @Override
+      public Thread newThread(Runnable runnable) {
+        Thread thread = new Thread(runnable, namePrefix + "-" + count.incrementAndGet());
+        thread.setDaemon(true);
+        return thread;
+      }
+    };
   }
 
   private boolean getCrawlerUp(String crawlUrlStr) {

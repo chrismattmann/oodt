@@ -65,21 +65,17 @@ public class HealthResource extends PCSService {
   private static final Logger LOG = Logger.getLogger(HealthResource.class
       .getName());
 
-  private PCSHealthMonitor mon;
+  private static PCSHealthMonitor mon;
 
   public HealthResource() throws MalformedURLException, InstantiationException {
     super();
-    mon = new PCSHealthMonitor(PCSService.conf.getFmUrl().toString(),
-        PCSService.conf.getWmUrl().toString(), PCSService.conf.getRmUrl()
-            .toString(), PCSService.conf.getCrawlerConfigFilePath(),
-        PCSService.conf.getWorkflowStatusesFilePath());
   }
 
   @GET
   @Path("report")
   @Produces("text/plain")
   public String healthReport() {
-    PCSHealthMonitorReport report = mon.getReport();
+    PCSHealthMonitorReport report = getMonitor().getReport();
     Map<String, Object> output = new ConcurrentHashMap<String, Object>();
     output.put("generated", report.getCreateDateIsoFormat());
     output.put("daemonStatus", this.encodeDaemonOutput(report));
@@ -94,7 +90,7 @@ public class HealthResource extends PCSService {
   @Path("report/ingest")
   @Produces("text/plain")
   public String ingestReport() {
-    PCSHealthMonitorReport report = mon.getReport();
+    PCSHealthMonitorReport report = getMonitor().getReport();
     Map<String, Object> output = new ConcurrentHashMap<String, Object>();
     output.put("generated", report.getCreateDateIsoFormat());
     output.put("ingestHealth", this.encodeIngestHealthList(report));
@@ -105,7 +101,7 @@ public class HealthResource extends PCSService {
   @Path("report/ingest/{cname}")
   @Produces("text/plain")
   public String ingestReportByName(@PathParam("cname") String crawlerName) {
-    PCSHealthMonitorReport report = mon.getReport();
+    PCSHealthMonitorReport report = getMonitor().getReport();
     Map<String, Object> output = new ConcurrentHashMap<String, Object>();
     output.put("generated", report.getCreateDateIsoFormat());
     output.put("ingestHealth", this
@@ -117,7 +113,7 @@ public class HealthResource extends PCSService {
   @Path("report/jobs")
   @Produces("text/plain")
   public String jobsReport() {
-    PCSHealthMonitorReport report = mon.getReport();
+    PCSHealthMonitorReport report = getMonitor().getReport();
     Map<String, Object> output = new ConcurrentHashMap<String, Object>();
     output.put("generated", report.getCreateDateIsoFormat());
     output.put("jobHealth", this.encodeJobHealthStatusList(report));
@@ -128,7 +124,7 @@ public class HealthResource extends PCSService {
   @Path("report/jobs/{state}")
   @Produces("text/plain")
   public String jobsReportByState(@PathParam("state") String jobState) {
-    PCSHealthMonitorReport report = mon.getReport();
+    PCSHealthMonitorReport report = getMonitor().getReport();
     Map<String, Object> output = new ConcurrentHashMap<String, Object>();
     output.put("generated", report.getCreateDateIsoFormat());
     output.put("jobHealth", this.encodeJobHealthStatusList(report, jobState));
@@ -139,7 +135,7 @@ public class HealthResource extends PCSService {
   @Path("report/daemon")
   @Produces("text/plain")
   public String daemonReport() {
-    PCSHealthMonitorReport report = mon.getReport();
+    PCSHealthMonitorReport report = getMonitor().getReport();
     Map<String, Object> output = new ConcurrentHashMap<String, Object>();
     output.put("generated", report.getCreateDateIsoFormat());
     output.put("daemonStatus", this.encodeDaemonOutput(report));
@@ -150,7 +146,7 @@ public class HealthResource extends PCSService {
   @Path("report/daemon/{dname}")
   @Produces("text/plain")
   public String daemonReportByName(@PathParam("dname") String daemonName) {
-    PCSHealthMonitorReport report = mon.getReport();
+    PCSHealthMonitorReport report = getMonitor().getReport();
     Map<String, Object> output = new ConcurrentHashMap<String, Object>();
     output.put("generated", report.getCreateDateIsoFormat());
     output.put("daemonStatus", this.encodeDaemonOutput(report, daemonName));
@@ -162,7 +158,7 @@ public class HealthResource extends PCSService {
   @Path("report/crawlers")
   @Produces("text/plain")
   public String crawlerHealthReport() {
-    PCSHealthMonitorReport report = mon.getReport();
+    PCSHealthMonitorReport report = getMonitor().getReport();
     Map<String, Object> output = new ConcurrentHashMap<String, Object>();
     output.put("generated", report.getCreateDateIsoFormat());
     output.put("crawlerStatus", this.encodeCrawlerHealthReportOutput(report));
@@ -174,7 +170,7 @@ public class HealthResource extends PCSService {
   @Produces("text/plain")
   public String getCrawlerHealthReportByName(
       @PathParam("cname") String crawlerName) {
-    PCSHealthMonitorReport report = mon.getReport();
+    PCSHealthMonitorReport report = getMonitor().getReport();
     Map<String, Object> output = new ConcurrentHashMap<String, Object>();
     output.put("generated", report.getCreateDateIsoFormat());
     output.put("crawlerStatus", this.encodeCrawlerHealthReportOutput(report,
@@ -186,7 +182,7 @@ public class HealthResource extends PCSService {
   @Path("report/latestfiles")
   @Produces("text/plain")
   public String getLatestIngestedFiles() {
-    PCSHealthMonitorReport report = mon.getReport();
+    PCSHealthMonitorReport report = getMonitor().getReport();
     Map<String, Object> output = new ConcurrentHashMap<String, Object>();
     output.put("generated", report.getCreateDateIsoFormat());
     output.put("latestFiles", this.encodeLatestFilesOutput(report));
@@ -197,6 +193,20 @@ public class HealthResource extends PCSService {
     JSONObject response = new JSONObject();
     response.put("report", reportHash);
     return response.toString();
+  }
+
+  private static synchronized PCSHealthMonitor getMonitor() {
+    if (mon == null) {
+      try {
+        mon = new PCSHealthMonitor(PCSService.conf.getFmUrl().toString(),
+            PCSService.conf.getWmUrl().toString(), PCSService.conf.getRmUrl()
+                .toString(), PCSService.conf.getCrawlerConfigFilePath(),
+            PCSService.conf.getWorkflowStatusesFilePath());
+      } catch (MalformedURLException | InstantiationException e) {
+        throw new IllegalStateException("Unable to initialize PCS health monitor", e);
+      }
+    }
+    return mon;
   }
 
   private Map<String, Object> encodeCrawlerHealth(CrawlerHealth health) {

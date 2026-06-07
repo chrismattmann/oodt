@@ -171,7 +171,7 @@ public class AvroRpcBatchMgrProxy extends Thread implements Runnable {
     }
 
     private static int getIoWorkerCount() {
-        return Math.max(2, Runtime.getRuntime().availableProcessors() * 2);
+        return Integer.getInteger("org.apache.oodt.avro.client.ioWorkers", 2);
     }
 
     private static ThreadFactory newDaemonThreadFactory(final String namePrefix) {

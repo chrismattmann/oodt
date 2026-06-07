@@ -64,9 +64,11 @@ import java.net.URL;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -80,11 +82,20 @@ public class AvroFileManagerClient implements FileManagerClient {
 
     /** Shared Netty resources for all Avro file manager clients in this JVM. */
     private static final ChannelFactory CHANNEL_FACTORY = newSharedChannelFactory("avro-filemgr-client");
+    private static final Map<String, SharedConnection> SHARED_CONNECTIONS =
+        new ConcurrentHashMap<String, SharedConnection>();
 
     static {
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
             @Override
             public void run() {
+                for (SharedConnection connection : SHARED_CONNECTIONS.values()) {
+                    try {
+                        closeSharedNettyTransceiver((NettyTransceiver) connection.client);
+                    } catch (IOException e) {
+                        logger.warn("Unable to close shared file manager client", e);
+                    }
+                }
                 CHANNEL_FACTORY.releaseExternalResources();
             }
         }, "avro-filemgr-client-shutdown"));
@@ -102,6 +113,16 @@ public class AvroFileManagerClient implements FileManagerClient {
     /*DataTransfer class for transferring products*/
     private DataTransfer dataTransfer = null;
 
+    private static final class SharedConnection {
+        private final Transceiver client;
+        private final AvroFileManager proxy;
+
+        private SharedConnection(Transceiver client, AvroFileManager proxy) {
+            this.client = client;
+            this.proxy = proxy;
+        }
+    }
+
     public AvroFileManagerClient(final URL url) throws ConnectionException {
         this(url, true);
     }
@@ -110,9 +131,9 @@ public class AvroFileManagerClient implements FileManagerClient {
         //setup the and start the client
         try {
             this.fileManagerUrl = url;
-            InetSocketAddress inetSocketAddress = new InetSocketAddress(url.getHost(), this.fileManagerUrl.getPort());
-            this.client = new NettyTransceiver(inetSocketAddress, CHANNEL_FACTORY, 40000L);
-            proxy = (AvroFileManager) SpecificRequestor.getClient(AvroFileManager.class, client);
+            SharedConnection connection = getSharedConnection(url);
+            this.client = connection.client;
+            proxy = connection.proxy;
         } catch (IOException e) {
             logger.error("Error occurred when creating file manager: {}", url, e);
         }
@@ -740,14 +761,22 @@ public class AvroFileManagerClient implements FileManagerClient {
     @Override
     public void close() throws IOException {
         logger.info("Closing file manager client for URL: {}", fileManagerUrl);
-        try {
-            if (client != null) {
-                closeTransceiver(client);
-            }
-        } finally {
-            client = null;
-            proxy = null;
+        client = null;
+        proxy = null;
+    }
+
+    private static synchronized SharedConnection getSharedConnection(URL url) throws IOException {
+        String key = url.toExternalForm();
+        SharedConnection connection = SHARED_CONNECTIONS.get(key);
+        if (connection == null) {
+            InetSocketAddress inetSocketAddress = new InetSocketAddress(url.getHost(), url.getPort());
+            Transceiver transceiver = new NettyTransceiver(inetSocketAddress, CHANNEL_FACTORY, 40000L);
+            AvroFileManager sharedProxy = (AvroFileManager) SpecificRequestor.getClient(
+                AvroFileManager.class, transceiver);
+            connection = new SharedConnection(transceiver, sharedProxy);
+            SHARED_CONNECTIONS.put(key, connection);
         }
+        return connection;
     }
 
     private static void closeTransceiver(Transceiver transceiver) throws IOException {
@@ -798,7 +827,7 @@ public class AvroFileManagerClient implements FileManagerClient {
     }
 
     private static int getIoWorkerCount() {
-        return Math.max(2, Runtime.getRuntime().availableProcessors() * 2);
+        return Integer.getInteger("org.apache.oodt.avro.client.ioWorkers", 2);
     }
 
     private static ThreadFactory newDaemonThreadFactory(final String namePrefix) {
